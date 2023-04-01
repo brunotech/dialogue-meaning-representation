@@ -8,9 +8,7 @@ from utils import ff_schema_tokens, DMR
 
 
 def add_tokens(tokenizer, tokens):
-    tokens_to_add = []
-    for i in range(len(tokens)):
-        tokens_to_add.append('<<' + tokens[i] + '>>')
+    tokens_to_add = [f'<<{tokens[i]}>>' for i in range(len(tokens))]
     for tok in tokens_to_add:
         assert tokenizer.convert_tokens_to_ids([tok])[0] == tokenizer.unk_token_id
     tokens_to_add = sorted(tokens_to_add, key=lambda x: len(x), reverse=True)
@@ -45,24 +43,23 @@ def _map_variable_to_value(dmr, var2val, is_node=True):
 
 def linearize_dmr(value, is_root=True, var2val=None):
     if not var2val:
-        var2val = dict()
+        var2val = {}
         _map_variable_to_value(value, var2val)
 
     str_ = ''
     if isinstance(value, str):
         if is_root:
-            str_ = '( ' + value + ' )'
+            str_ = f'( {value} )'
+        elif re.fullmatch(r'v[\d]+', value):
+            str_ = var2val[value]
+        elif re.match(r'v[\d]+ / ', value):
+            m = re.match(r'v[\d]+ / ', value)
+            var = value[m.span()[0]: m.span()[1] - 3]
+            str_ = var2val[var]
+        elif value == '-':
+            str_ = '#-'
         else:
-            if re.fullmatch(r'v[\d]+', value):
-                str_ = var2val[value]
-            elif re.match(r'v[\d]+ / ', value):
-                m = re.match(r'v[\d]+ / ', value)
-                var = value[m.span()[0]: m.span()[1] - 3]
-                str_ = var2val[var]
-            elif '-' == value:
-                str_ = '#-'
-            else:
-                str_ = value
+            str_ = value
     elif isinstance(value, dict):
         keys = sorted(value.keys())
         # is_op = False
@@ -81,10 +78,8 @@ def linearize_dmr(value, is_root=True, var2val=None):
 
             if _key == 'and':
                 str_ += ' ( #and' + ' ' + linearize_dmr(value[key], False, var2val) + ' )'
-            # elif is_op:
-            #     str_ += ' [ :op' + ' ' + linearize_dmr(value[key], False, var2val) + ' ]'
             else:
-                str_ += ' ( ' + _key + ' ' + linearize_dmr(value[key], False, var2val) + ' )'
+                str_ += f' ( {_key} {linearize_dmr(value[key], False, var2val)} )'
     else:
         raise RuntimeError()
     return str_.strip()
@@ -112,19 +107,18 @@ def generate_examples(dialog,
             target = target.split()
             for j in range(len(target)):
                 if target[j] in schema_tokens:
-                    target[j] = '<<' + target[j] + '>>'
+                    target[j] = f'<<{target[j]}>>'
             target = ' '.join(target)
 
             start_turn = i - context_size
-            if start_turn < 0:
-                start_turn = 0
+            start_turn = max(start_turn, 0)
             context = turns[start_turn:i]
-            source = ''
-            for _t in context:
-                if add_role:
-                    source += f'{_t["authorRole"]} : ' + _t['tokenized_content'] + ' '
-                else:
-                    source += _t['tokenized_content'] + ' '
+            source = ''.join(
+                f'{_t["authorRole"]} : ' + _t['tokenized_content'] + ' '
+                if add_role
+                else _t['tokenized_content'] + ' '
+                for _t in context
+            )
             if add_role and context_size > 0:
                 source += f'{t["authorRole"]} : ' + t['tokenized_content']
             else:
@@ -186,7 +180,7 @@ def dataloader(segment,
 
     schema_token_ids = set()
     for tok in ff_schema_tokens:
-        schema_token_ids.add(tokenizer.convert_tokens_to_ids('<<' + tok + '>>'))
+        schema_token_ids.add(tokenizer.convert_tokens_to_ids(f'<<{tok}>>'))
 
     def _collate_fn(batch):
         logits_masks = []

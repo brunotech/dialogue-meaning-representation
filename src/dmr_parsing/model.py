@@ -57,9 +57,10 @@ class Seq2Seq(nn.Module):
     ):
         if self.args.model == 'lstm':
             input_embeds = self.embedding(input_ids).float()
-            lengths = []
-            for i in range(attention_mask.size(0)):
-                lengths.append(attention_mask[i].sum().item())
+            lengths = [
+                attention_mask[i].sum().item()
+                for i in range(attention_mask.size(0))
+            ]
             input_embeds = pack_padded_sequence(input_embeds, lengths, batch_first=True, enforce_sorted=False)
             _, hidden = self.encoder(input_embeds)
 
@@ -94,15 +95,15 @@ class Seq2Seq(nn.Module):
                  input_ids=None,
                  attention_mask=None,
                  logits_mask=None):
-        outputs = self.greedy_decode(input_ids, attention_mask, logits_mask)
-        return outputs
+        return self.greedy_decode(input_ids, attention_mask, logits_mask)
 
     def greedy_decode(self, input_ids, attention_mask, logits_mask):
         if self.args.model == 'lstm':
             input_embeds = self.embedding(input_ids).float()
-            lengths = []
-            for i in range(attention_mask.size(0)):
-                lengths.append(attention_mask[i].sum().item())
+            lengths = [
+                attention_mask[i].sum().item()
+                for i in range(attention_mask.size(0))
+            ]
             input_embeds = pack_padded_sequence(input_embeds, lengths, batch_first=True, enforce_sorted=False)
             _, hidden = self.encoder(input_embeds)
 
@@ -115,7 +116,7 @@ class Seq2Seq(nn.Module):
             decoder_input_ids = torch.zeros([input_ids.size(0), 1], dtype=torch.long) + self.args.tokenizer.bos_token_id
             decoder_input_ids = decoder_input_ids.to(input_ids.device)
             max_decode_length = self.args.max_decode_length
-            for i in range(max_decode_length):
+            for _ in range(max_decode_length):
                 _decoder_input_ids = decoder_input_ids[:, -1:]
                 embed = self.embedding(_decoder_input_ids).float()
                 out, hidden = self.decoder(embed, (h, c))
@@ -149,7 +150,7 @@ class Seq2Seq(nn.Module):
             batch_ids = set(range(input_ids.size(0)))
             stopped_batch_ids = set()
             past_key_values = None
-            for i in range(max_decode_length):
+            for _ in range(max_decode_length):
                 _decoder_input_ids = decoder_input_ids[:, -1:]
                 decoder_output = decoder(
                     input_ids=_decoder_input_ids,

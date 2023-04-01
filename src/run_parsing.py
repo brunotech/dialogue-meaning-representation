@@ -44,10 +44,7 @@ def test(dl, segment='test', save_file=False):
     predicted_dmrs = [parse_dmr_line_to_dict(s) for s in predictions]
 
     _, smatch_scores = score_dmr_pairs([p[0] for p in predicted_dmrs], annotations)
-    em = 0
-    for _, _, f1 in smatch_scores:
-        if f1 == 1.0:
-            em += 1
+    em = sum(f1 == 1.0 for _, _, f1 in smatch_scores)
     em /= len(smatch_scores)
 
     if save_file:

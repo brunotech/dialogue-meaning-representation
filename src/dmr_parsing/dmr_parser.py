@@ -19,7 +19,7 @@ def assign_var(g):
                 var_idx += 1
                 return g
         else:
-            new_g = dict()
+            new_g = {}
             for k, v in g.items():
                 if is_node:
                     new_k = _bfs(k, True, node_incoming_edge)
@@ -29,6 +29,7 @@ def assign_var(g):
                     new_v = _bfs(v, not is_node, k)
                 new_g[new_k] = new_v
             return new_g
+
     g = _bfs(g)
     return g
 
@@ -73,7 +74,7 @@ def _parse(s):
     key_stack = []
     value_stack = []
 
-    for i, tok in enumerate(s):
+    for tok in s:
         if tok == '(':
             if state == value_state:
                 key_stack.append(cur_key)
@@ -81,41 +82,38 @@ def _parse(s):
                 cur_key = ''
             state = left_bracket_state
         elif tok == ')':
-            if len(key_stack) == 0:
+            if not key_stack:
                 if len(cur_key) > 0:
                     return cur_key
-                if len(cur_value) > 0:
-                    return cur_value
-                return None
-
+                else:
+                    return cur_value if len(cur_value) > 0 else None
             top_key = key_stack.pop()
             if state == value_state:
                 value_stack.pop()
-                if len(value_stack) > 0:
+                if value_stack:
                     value_stack[-1].append({top_key: cur_value})
                 else:
                     return {top_key: cur_value}
-            else:
-                if len(value_stack[-1]) == 1:
-                    v = value_stack.pop()
-                    if len(value_stack) > 0:
-                        value_stack[-1].append({top_key: v[0]})
+            elif len(value_stack[-1]) == 1:
+                v = value_stack.pop()
+                if value_stack:
+                    value_stack[-1].append({top_key: v[0]})
+                else:
+                    return {top_key: v[0]}
+            elif len(value_stack[-1]) > 1:
+                top_values = value_stack.pop()
+                merged_v = {}
+                for _v in top_values:
+                    if isinstance(_v, dict):
+                        for k, v in _v.items():
+                            merged_v[k] = v
+                if merged_v:
+                    if value_stack:
+                        value_stack[-1].append({top_key: merged_v})
                     else:
-                        return {top_key: v[0]}
-                elif len(value_stack[-1]) > 1:
-                    merged_v = dict()
-                    top_values = value_stack.pop()
-                    for _v in top_values:
-                        if isinstance(_v, dict):
-                            for k, v in _v.items():
-                                merged_v[k] = v
-                    if len(merged_v) > 0:
-                        if len(value_stack) > 0:
-                            value_stack[-1].append({top_key: merged_v})
-                        else:
-                            return {top_key: merged_v}
+                        return {top_key: merged_v}
 
-            if len(key_stack) == 0:
+            if not key_stack:
                 return top_key
 
             state = right_bracket_state
@@ -130,9 +128,9 @@ def _parse(s):
                 cur_key = tok
             elif state == value_state:
                 if len(cur_key) > 0:
-                    cur_key += ' ' + tok
+                    cur_key += f' {tok}'
                 elif len(cur_value) > 0:
-                    cur_value += ' ' + tok
+                    cur_value += f' {tok}'
             elif state == relation_state:
                 cur_value = tok
             else:
@@ -149,8 +147,5 @@ def parse_dmr_line_to_dict(dmr_line, default_value='OutOfDomainIntent'):
     if not dmr_wo_var:
         dmr_wo_var = default_value
         is_valid = False
-    if isinstance(dmr_wo_var, dict):
-        dmr = assign_var(dmr_wo_var)
-    else:
-        dmr = dmr_wo_var
+    dmr = assign_var(dmr_wo_var) if isinstance(dmr_wo_var, dict) else dmr_wo_var
     return dmr, is_valid
