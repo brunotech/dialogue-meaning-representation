@@ -101,9 +101,7 @@ def test(dl, best_beta=None, save_result=False):
     else:
         acc = correct_cnt / tot_cnt
 
-    if save_result:
-        return acc, cid_to_wrong_predictions
-    return acc, best_beta
+    return (acc, cid_to_wrong_predictions) if save_result else (acc, best_beta)
 
 
 def train():
@@ -130,7 +128,7 @@ def train():
             best_dev_acc = dev_acc
             best_beta = beta
             torch.save(model.state_dict(), ckpt_file)
-            json.dump(best_beta, open(ckpt_file + '_best_beta.json', 'w'))
+            json.dump(best_beta, open(f'{ckpt_file}_best_beta.json', 'w'))
             print(f'Model saved to {ckpt_file}')
         print(f'So far, dev best Acc: {best_dev_acc}')
     model.load_state_dict(torch.load(ckpt_file))
@@ -201,7 +199,7 @@ if __name__ == '__main__':
         train()
     elif args.dev:
         model.load_state_dict(torch.load(ckpt_file))
-        best_beta = json.load(open(ckpt_file + '_best_beta.json'))
+        best_beta = json.load(open(f'{ckpt_file}_best_beta.json'))
         dev_acc, cid_to_wrong_predictions = test(dev_dl, best_beta, save_result=True)
         print(f'Dev set Acc {dev_acc}')
 
@@ -210,7 +208,7 @@ if __name__ == '__main__':
         json.dump(dev_data, open('dev_coref_result.json', 'w'), indent=4)
     elif args.test:
         model.load_state_dict(torch.load(ckpt_file))
-        best_beta = json.load(open(ckpt_file + '_best_beta.json'))
+        best_beta = json.load(open(f'{ckpt_file}_best_beta.json'))
         test_acc, cid_to_wrong_predictions = test(test_dl, best_beta, save_result=True)
         print(f'Test set Acc {test_acc}')
 

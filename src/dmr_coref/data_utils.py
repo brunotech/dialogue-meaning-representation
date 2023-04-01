@@ -15,21 +15,15 @@ anaphora_edge = 'anaphora_edge'
 
 
 def get_edge_vocab():
-    edge_types = []
-    for e in ff_schema_tokens:
-        if e[0] == ':':
-            edge_types.append(e)
+    edge_types = [e for e in ff_schema_tokens if e[0] == ':']
     edge_types += inter_turn_edges
     edge_types.append(intra_turn_edge)
     edge_types.append(anaphora_edge)
     edge_types = sorted(edge_types)
     for i in range(len(edge_types)):
-        edge_types.append('INV_' + edge_types[i])
+        edge_types.append(f'INV_{edge_types[i]}')
 
-    edge_vocab = dict()
-    for i, e in enumerate(edge_types):
-        edge_vocab[e] = i
-    return edge_vocab
+    return {e: i for i, e in enumerate(edge_types)}
 
 
 def get_examples(data,
@@ -50,7 +44,7 @@ def get_examples(data,
         if has_anaphora:
             turn_node_ids = []
 
-            node_position_to_id = dict()
+            node_position_to_id = {}
             node_type_to_ids = defaultdict(list)
 
             g = dgl.graph([])
@@ -75,8 +69,7 @@ def get_examples(data,
                     for j, nid in enumerate(reversed(turn_node_ids)):
                         g = dgl.add_edges(g, turn_node_id, nid)
                         g = dgl.add_edges(g, nid, turn_node_id)
-                        edges.append(inter_turn_edges[j])
-                        edges.append('INV_' + inter_turn_edges[j])
+                        edges.extend((inter_turn_edges[j], f'INV_{inter_turn_edges[j]}'))
                     turn_node_ids.append(turn_node_id)
 
                     # =================== add this dmr to the graph ===================
@@ -144,27 +137,22 @@ def get_examples(data,
 
                         g = dgl.add_edges(g, head_nid, tail_nid)
                         g = dgl.add_edges(g, tail_nid, head_nid)
-                        edges.append(rel)
-                        edges.append('INV_' + rel)
-
+                        edges.extend((rel, f'INV_{rel}'))
                         if add_global_node:
                             # link every node in dmr to turn_node
                             if not is_head_added:
                                 g = dgl.add_edges(g, head_nid, turn_node_id)
                                 edges.append(intra_turn_edge)
                                 g = dgl.add_edges(g, turn_node_id, head_nid)
-                                edges.append('INV_' + intra_turn_edge)
+                                edges.append(f'INV_{intra_turn_edge}')
                             if not is_tail_added:
                                 g = dgl.add_edges(g, tail_nid, turn_node_id)
                                 edges.append(intra_turn_edge)
                                 g = dgl.add_edges(g, turn_node_id, tail_nid)
-                                edges.append('INV_' + intra_turn_edge)
+                                edges.append(f'INV_{intra_turn_edge}')
 
-                    if len(references) > 0:
-                        nid_to_position = dict()
-                        for pos, nid in node_position_to_id.items():
-                            nid_to_position[nid] = pos
-
+                    if references:
+                        nid_to_position = {nid: pos for pos, nid in node_position_to_id.items()}
                         ex = {
                             'graph': deepcopy(g),
                             'references': references,
@@ -183,7 +171,7 @@ def get_examples(data,
                                     g = dgl.add_edges(g, anaphor_nid, ante_nid)
                                     edges.append(anaphora_edge)
                                     g = dgl.add_edges(g, ante_nid, anaphor_nid)
-                                    edges.append('INV_' + anaphora_edge)
+                                    edges.append(f'INV_{anaphora_edge}')
 
                     for k, v in _ntype2ids.items():
                         node_type_to_ids[k] += v
@@ -224,19 +212,16 @@ def dataloader(segment,
             node_feats_vec = []
             for nid, feat in enumerate(node_features):
                 feat = feat.strip()
-                if feat == 'and' or feat == '-':
-                    node_feats_vec.append(np.array(w2vec['<<#' + feat + '>>']))
+                if feat in ['and', '-']:
+                    node_feats_vec.append(np.array(w2vec[f'<<#{feat}>>']))
                 elif feat in ff_schema_tokens:
-                    node_feats_vec.append(np.array(w2vec['<<' + feat + '>>']))
+                    node_feats_vec.append(np.array(w2vec[f'<<{feat}>>']))
                 else:
                     feat = feat.split()
                     _feat = 0.
                     for tok in feat:
                         tok = tok.lower()
-                        if tok in w2vec:
-                            _feat += np.array(w2vec[tok])
-                        else:
-                            _feat += np.array(w2vec['<unk>'])
+                        _feat += np.array(w2vec[tok]) if tok in w2vec else np.array(w2vec['<unk>'])
                     _feat /= len(feat)
                     node_feats_vec.append(_feat)
             node_feats = torch.tensor(node_feats_vec, dtype=torch.float, device=device)
@@ -275,7 +260,7 @@ def dataloader(segment,
 def build_coref_vocab():
     words = ['<unk>', '/', 'reference']
 
-    words_in_data_2_cnt = dict()
+    words_in_data_2_cnt = {}
     for split in ['train', 'dev', 'test']:
         data = json.load(open(f'../data/{split}.json'))
         for d in data:
@@ -290,15 +275,12 @@ def build_coref_vocab():
                                     words_in_data_2_cnt[tok.lower()] = words_in_data_2_cnt.get(tok.lower(), 0) + 1
 
     # print(words_in_data_2_cnt)
-    for k, v in words_in_data_2_cnt.items():
-        if v > 5:
-            words.append(k)
-
+    words.extend(k for k, v in words_in_data_2_cnt.items() if v > 5)
     words += [f'<<{w}>>' for w in ff_schema_tokens]
 
-    w2vec = dict()
+    w2vec = {}
     with open('glove.6B.100d.txt', 'r', encoding='utf8') as f:
-        for l in f.readlines():
+        for l in f:
             l = l.replace('\n', '').strip().split()
             if len(l) == 101 and l[0] in words:
                 w = l[0]

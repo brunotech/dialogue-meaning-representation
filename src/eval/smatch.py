@@ -165,8 +165,7 @@ def compute_pool(instance1, attribute1, relation1,
                     if node_pair in weight_dict:
                         weight_dict[node_pair][-1] += 1
                     else:
-                        weight_dict[node_pair] = {}
-                        weight_dict[node_pair][-1] = 1
+                        weight_dict[node_pair] = {-1: 1}
     if doattribute:
         for attribute1_item in attribute1:
             for attribute2_item in attribute2:
@@ -181,8 +180,7 @@ def compute_pool(instance1, attribute1, relation1,
                     if node_pair in weight_dict:
                         weight_dict[node_pair][-1] += 1
                     else:
-                        weight_dict[node_pair] = {}
-                        weight_dict[node_pair][-1] = 1
+                        weight_dict[node_pair] = {-1: 1}
     if dorelation:
         for relation1_item in relation1:
             for relation2_item in relation2:
@@ -219,13 +217,10 @@ def compute_pool(instance1, attribute1, relation1,
                                 weight_dict[node_pair2][node_pair1] = 1
                         else:
                             weight_dict[node_pair2] = {-1: 0, node_pair1: 1}
+                    elif node_pair1 in weight_dict:
+                        weight_dict[node_pair1][-1] += 1
                     else:
-                        # two node pairs are the same. So we only update weight_dict once.
-                        # this generally should not happen.
-                        if node_pair1 in weight_dict:
-                            weight_dict[node_pair1][-1] += 1
-                        else:
-                            weight_dict[node_pair1] = {-1: 1}
+                        weight_dict[node_pair1] = {-1: 1}
     return candidate_mapping, weight_dict
 
 
@@ -256,11 +251,10 @@ def smart_init_mapping(candidate_mapping, instance1, instance2):
             value2 = instance2[node_index][2]
             # find the first instance triple match in the candidates
             # instance triple match is having the same concept value
-            if value1 == value2:
-                if node_index not in matched_dict:
-                    result.append(node_index)
-                    matched_dict[node_index] = 1
-                    break
+            if value1 == value2 and node_index not in matched_dict:
+                result.append(node_index)
+                matched_dict[node_index] = 1
+                break
         if len(result) == i:
             no_word_match.append(i)
             result.append(-1)
@@ -562,20 +556,19 @@ def get_best_gain(mapping, candidate_mappings, weight_dict, instance_len, cur_ma
                 use_swap = True
     # generate a new mapping based on swap/move
     cur_mapping = mapping[:]
-    if node1 is not None:
-        if use_swap:
-            if veryVerbose:
-                print("Use swap gain", file=DEBUG_LOG)
-            temp = cur_mapping[node1]
-            cur_mapping[node1] = cur_mapping[node2]
-            cur_mapping[node2] = temp
-        else:
-            if veryVerbose:
-                print("Use move gain", file=DEBUG_LOG)
-            cur_mapping[node1] = node2
-    else:
+    if node1 is None:
         if veryVerbose:
             print("no move/swap gain found", file=DEBUG_LOG)
+    elif use_swap:
+        if veryVerbose:
+            print("Use swap gain", file=DEBUG_LOG)
+        temp = cur_mapping[node1]
+        cur_mapping[node1] = cur_mapping[node2]
+        cur_mapping[node2] = temp
+    else:
+        if veryVerbose:
+            print("Use move gain", file=DEBUG_LOG)
+        cur_mapping[node1] = node2
     if veryVerbose:
         print("Original mapping", mapping, file=DEBUG_LOG)
         print("Current mapping", cur_mapping, file=DEBUG_LOG)
@@ -593,12 +586,12 @@ def print_alignment(mapping, instance1, instance2):
     """
     result = []
     for instance1_item, m in zip(instance1, mapping):
-        r = instance1_item[1] + "(" + instance1_item[2] + ")"
+        r = f"{instance1_item[1]}({instance1_item[2]})"
         if m == -1:
             r += "-Null"
         else:
             instance2_item = instance2[m]
-            r += "-" + instance2_item[1] + "(" + instance2_item[2] + ")"
+            r += f"-{instance2_item[1]}({instance2_item[2]})"
         result.append(r)
     return " ".join(result)
 
@@ -664,7 +657,7 @@ def get_amr_match(cur_amr1, cur_amr2, sent_num=1, justinstance=False, justattrib
         except Exception as e:
             print("Error in parsing amr %d: %s" % (i, cur_amr), file=ERROR_LOG)
             print("Please check if the AMR is ill-formatted. Ignoring remaining AMRs", file=ERROR_LOG)
-            print("Error message: %s" % e, file=ERROR_LOG)
+            print(f"Error message: {e}", file=ERROR_LOG)
     amr1, amr2 = amr_pair
     prefix1 = "a"
     prefix2 = "b"

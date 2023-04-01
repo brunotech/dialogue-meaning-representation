@@ -128,16 +128,15 @@ class Node:
                 self.is_reference_node = True
                 if ' || ' in node:
                     self.value = node.split(' || ')[1]
+            elif ' || ' in node:
+                self.value, self.entity_type = node.split(' || ')
+                assert self.entity_type in ff_entity_types
             else:
-                if ' || ' in node:
-                    self.value, self.entity_type = node.split(' || ')
-                    assert self.entity_type in ff_entity_types
+                node = node.strip()
+                if node in ff_entity_types:
+                    self.entity_type = node
                 else:
-                    node = node.strip()
-                    if node in ff_entity_types:
-                        self.entity_type = node
-                    else:
-                        self.value = node
+                    self.value = node
 
         self.in_relation = None
         self.out_relations = None
@@ -147,17 +146,17 @@ class Node:
         node_value = None
         if self.variable:
             if self.is_reference_node:
-                if not self.value:
-                    node_value = f'{self.variable} / reference'
-                else:
-                    node_value = f'{self.variable} / reference || {self.value}'
-            else:
-                if self.value and self.entity_type:
-                    node_value = f'{self.variable} / {self.value} || {self.entity_type}'
-                elif self.value:
-                    node_value = f'{self.variable} / {self.value}'
-                elif self.entity_type:
-                    node_value = f'{self.variable} / {self.entity_type}'
+                node_value = (
+                    f'{self.variable} / reference || {self.value}'
+                    if self.value
+                    else f'{self.variable} / reference'
+                )
+            elif self.value and self.entity_type:
+                node_value = f'{self.variable} / {self.value} || {self.entity_type}'
+            elif self.value:
+                node_value = f'{self.variable} / {self.value}'
+            elif self.entity_type:
+                node_value = f'{self.variable} / {self.entity_type}'
         else:
             node_value = self.value
         return node_value
@@ -225,8 +224,10 @@ class DMR:
                     node.referents = []
                     if r.tail_node.value == 'and':
                         r.tail_node.out_relations = sorted(r.tail_node.out_relations, key=lambda x: int(x.value[3:]))
-                        for _r in r.tail_node.out_relations:
-                            node.referents.append(Reference(_r.tail_node.value))
+                        node.referents.extend(
+                            Reference(_r.tail_node.value)
+                            for _r in r.tail_node.out_relations
+                        )
                     else:
                         node.referents.append(Reference(r.tail_node.value))
                     if any(refer.variable is None for refer in node.referents):
@@ -258,7 +259,7 @@ class DMR:
             else:
                 node_value = n.value
             if n.out_relations:
-                value_dict = dict()
+                value_dict = {}
                 for r in n.out_relations:
                     if r.value == ':refer' and for_parsing:
                         continue
@@ -283,13 +284,12 @@ class DMR:
 class GloVeTokenizer:
     def __init__(self, vocab_file):
         self.tok_to_id = json.load(open(vocab_file))
-        self.id_to_tok = dict()
+        self.id_to_tok = {}
         for k, v in self.tok_to_id.items():
             self.id_to_tok[v] = k
 
     def tokenize(self, x, **kwargs):
-        ret = x.strip().split()
-        return ret
+        return x.strip().split()
 
     @property
     def eos_token_id(self):
@@ -309,15 +309,13 @@ class GloVeTokenizer:
                 x = '<unk>'
             return self.tok_to_id[x]
         elif isinstance(x, list):
-            ret = [self.convert_tokens_to_ids(e) for e in x]
-            return ret
+            return [self.convert_tokens_to_ids(e) for e in x]
 
     def convert_ids_to_tokens(self, x):
         if isinstance(x, int):
             return self.id_to_tok[x]
         elif isinstance(x, list):
-            ret = [self.convert_ids_to_tokens(e) for e in x]
-            return ret
+            return [self.convert_ids_to_tokens(e) for e in x]
 
     def encode_plus(self, x, **kwargs):
         return torch.tensor(x, dtype=torch.long)
@@ -332,8 +330,7 @@ class GloVeTokenizer:
 
         Padding = namedtuple('Padding', ['input_ids', 'attention_mask'])
 
-        padding = Padding(padded, attention_mask)
-        return padding
+        return Padding(padded, attention_mask)
 
     def batch_decode(self, x, **kwargs):
         special_ids = [self.pad_token_id, self.bos_token_id, self.eos_token_id]

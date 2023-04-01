@@ -61,9 +61,7 @@ class GNNCorefModel(nn.Module):
         pairs = torch.cat([heads, tails], -1)
         probs = self.prediction_layer(pairs).squeeze()
 
-        if has_label:
-            return probs, labels
-        return probs
+        return (probs, labels) if has_label else probs
 
 
 class MLPCorefModel(nn.Module):
@@ -80,6 +78,5 @@ class MLPCorefModel(nn.Module):
 
     def forward(self, batch):
         inputs = batch['inputs']
-        probs = self.mlp(inputs).squeeze()
-        return probs
+        return self.mlp(inputs).squeeze()
 
